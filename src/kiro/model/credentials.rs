@@ -65,6 +65,10 @@ pub struct KiroCredentials {
     /// 未配置时回退到 config.json 的全局代理
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proxy_url: Option<String>,
+
+    /// 邮箱（可选，仅用于标识/显示）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
 }
 
 /// 判断是否为零（用于跳过序列化）
@@ -253,10 +257,13 @@ fn init_schema(conn: &Connection) -> anyhow::Result<()> {
             priority INTEGER NOT NULL DEFAULT 0,
             region TEXT,
             machine_id TEXT,
-            proxy_url TEXT
+            proxy_url TEXT,
+            email TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_credentials_priority ON credentials(priority);",
     )?;
+    // 迁移：为旧表添加 email 列（如果不存在）
+    let _ = conn.execute("ALTER TABLE credentials ADD COLUMN email TEXT", []);
     Ok(())
 }
 
@@ -267,7 +274,7 @@ pub(crate) fn load_credentials_from_sqlite(path: &Path) -> anyhow::Result<Vec<Ki
 
     let mut stmt = conn.prepare(
         "SELECT id, access_token, refresh_token, profile_arn, expires_at, auth_method, \
-         client_id, client_secret, priority, region, machine_id, proxy_url \
+         client_id, client_secret, priority, region, machine_id, proxy_url, email \
          FROM credentials ORDER BY priority ASC, id ASC",
     )?;
 
@@ -287,6 +294,7 @@ pub(crate) fn load_credentials_from_sqlite(path: &Path) -> anyhow::Result<Vec<Ki
             region: row.get(9)?,
             machine_id: row.get(10)?,
             proxy_url: row.get(11)?,
+            email: row.get(12)?,
         })
     })?;
 
@@ -312,8 +320,8 @@ pub(crate) fn persist_credentials_to_sqlite(
         let mut stmt = tx.prepare(
             "INSERT INTO credentials (
                 id, access_token, refresh_token, profile_arn, expires_at, auth_method,
-                client_id, client_secret, priority, region, machine_id, proxy_url
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                client_id, client_secret, priority, region, machine_id, proxy_url, email
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )?;
 
         for cred in credentials {
@@ -331,6 +339,7 @@ pub(crate) fn persist_credentials_to_sqlite(
                 cred.region.as_deref(),
                 cred.machine_id.as_deref(),
                 cred.proxy_url.as_deref(),
+                cred.email.as_deref(),
             ])?;
         }
     }

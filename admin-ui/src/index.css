@@ -1,51 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --font-sans: "Spline Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-display: "Unbounded", "Spline Sans", "Segoe UI", sans-serif;
+
+    --background: 36 33% 97%;
+    --foreground: 210 24% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 210 24% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 210 24% 12%;
+    --primary: 202 83% 30%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 28 32% 93%;
+    --secondary-foreground: 210 24% 12%;
+    --muted: 28 32% 93%;
+    --muted-foreground: 210 12% 45%;
+    --accent: 190 32% 90%;
+    --accent-foreground: 210 24% 12%;
+    --destructive: 2 72% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 28 20% 88%;
+    --input: 28 20% 88%;
+    --ring: 202 83% 30%;
+    --radius: 0.9rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 210 22% 8%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 210 22% 10%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 210 22% 10%;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
+    --primary: 196 82% 45%;
+    --primary-foreground: 210 30% 12%;
+    --secondary: 210 18% 16%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 210 18% 16%;
+    --muted-foreground: 215 15% 70%;
+    --accent: 200 24% 18%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 2 62% 36%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 210 18% 18%;
+    --input: 210 18% 18%;
+    --ring: 196 82% 45%;
   }
 }
 
@@ -54,7 +59,65 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    font-family: var(--font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(1200px 600px at 6% -10%, hsla(202, 83%, 30%, 0.15), transparent 60%),
+      radial-gradient(800px 500px at 90% 10%, hsla(36, 80%, 70%, 0.25), transparent 55%);
+    background-attachment: fixed;
+  }
+}
+
+.dark body {
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, hsla(196, 82%, 45%, 0.2), transparent 60%),
+    radial-gradient(700px 500px at 90% 0%, hsla(32, 60%, 30%, 0.2), transparent 55%);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.6s ease both;
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease both;
+  }
+  .stagger-children > * {
+    animation: fade-up 0.6s ease both;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 0.08s;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 0.24s;
   }
 }

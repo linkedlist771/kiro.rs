@@ -29,13 +29,13 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <Card className="w-full max-w-md rounded-3xl border border-border/60 bg-card/80 shadow-sm backdrop-blur animate-fade-up">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <KeyRound className="h-6 w-6 text-primary" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <KeyRound className="h-6 w-6" />
           </div>
-          <CardTitle className="text-2xl">Kiro Admin</CardTitle>
+          <CardTitle className="text-2xl font-display">Kiro Admin</CardTitle>
           <CardDescription>
             请输入 Admin API Key 以访问管理面板
           </CardDescription>

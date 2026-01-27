@@ -27,6 +27,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
   const [clientSecret, setClientSecret] = useState('')
   const [priority, setPriority] = useState('0')
   const [proxyUrl, setProxyUrl] = useState('')
+  const [email, setEmail] = useState('')
 
   const { mutate, isPending } = useAddCredential()
 
@@ -38,6 +39,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
     setClientSecret('')
     setPriority('0')
     setProxyUrl('')
+    setEmail('')
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -64,6 +66,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
         clientSecret: clientSecret.trim() || undefined,
         priority: parseInt(priority) || 0,
         proxyUrl: proxyUrl.trim() || undefined,
+        email: email.trim() || undefined,
       },
       {
         onSuccess: (data) => {
@@ -100,6 +103,23 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
                 onChange={(e) => setRefreshToken(e.target.value)}
                 disabled={isPending}
               />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                邮箱（可选）
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="用于标识凭据归属"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                仅用于标识和展示，不影响鉴权
+              </p>
             </div>
 
             {/* 认证方式 */}

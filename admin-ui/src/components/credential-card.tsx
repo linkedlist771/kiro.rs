@@ -213,6 +213,10 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
               <span className="font-medium">{formatAuthMethodLabel(credential.authMethod)}</span>
             </div>
             <div>
+              <span className="text-muted-foreground">邮箱：</span>
+              <span className="font-medium">{credential.email || '—'}</span>
+            </div>
+            <div>
               <span className="text-muted-foreground">Token 有效期：</span>
               <span className="font-medium">{formatExpiry(credential.expiresAt)}</span>
             </div>

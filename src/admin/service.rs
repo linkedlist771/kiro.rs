@@ -40,6 +40,7 @@ impl AdminService {
                 auth_method: entry.auth_method,
                 has_profile_arn: entry.has_profile_arn,
                 proxy_url: entry.proxy_url,
+                email: entry.email,
             })
             .collect();
 
@@ -139,6 +140,7 @@ impl AdminService {
             region: req.region,
             machine_id: req.machine_id,
             proxy_url: req.proxy_url,
+            email: req.email,
         };
 
         // 调用 token_manager 添加凭据

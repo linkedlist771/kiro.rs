@@ -40,6 +40,8 @@ pub struct CredentialStatusItem {
     pub has_profile_arn: bool,
     /// 凭据级代理 URL（可选）
     pub proxy_url: Option<String>,
+    /// 邮箱（可选，仅用于标识/显示）
+    pub email: Option<String>,
 }
 
 // ============ 操作请求 ============
@@ -101,6 +103,9 @@ pub struct AddCredentialRequest {
     /// 支持格式: socks5://user:pass@host:port, http://host:port 等
     /// 未配置时回退到 config.json 的全局代理
     pub proxy_url: Option<String>,
+
+    /// 邮箱（可选，仅用于标识/显示）
+    pub email: Option<String>,
 }
 
 fn default_auth_method() -> String {

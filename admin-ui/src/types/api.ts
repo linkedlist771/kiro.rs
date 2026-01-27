@@ -17,6 +17,7 @@ export interface CredentialStatusItem {
   authMethod: string | null
   hasProfileArn: boolean
   proxyUrl: string | null
+  email: string | null
 }
 
 // 余额响应
@@ -66,6 +67,7 @@ export interface AddCredentialRequest {
   priority?: number
   region?: string
   proxyUrl?: string
+  email?: string
 }
 
 // 添加凭据响应

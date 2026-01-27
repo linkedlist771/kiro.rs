@@ -429,6 +429,8 @@ pub struct CredentialEntrySnapshot {
     pub expires_at: Option<String>,
     /// 凭据级代理 URL
     pub proxy_url: Option<String>,
+    /// 邮箱（可选，仅用于标识/显示）
+    pub email: Option<String>,
 }
 
 /// 凭据管理器状态快照
@@ -1082,6 +1084,7 @@ impl MultiTokenManager {
                     has_profile_arn: e.credentials.profile_arn.is_some(),
                     expires_at: e.credentials.expires_at.clone(),
                     proxy_url: e.credentials.proxy_url.clone(),
+                    email: e.credentials.email.clone(),
                 })
                 .collect(),
             current_id,
