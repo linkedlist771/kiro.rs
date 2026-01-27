@@ -95,9 +95,11 @@ cargo build --release
 ```
 ### 3. 凭证文件
 
-创建 `credentials.json` 凭证文件（从 Kiro IDE 获取）。支持两种格式：
+默认使用 SQLite 持久化：`data/credentials.db`。  
+如果目录下存在旧的 `credentials.json`，启动时会自动迁移到 SQLite。  
+仍支持通过 `--credentials` 指定 JSON 文件进行导入（向后兼容）。
 
-#### 单凭据格式（旧格式，向后兼容）
+#### JSON 单凭据格式（旧格式，向后兼容，用于导入）
 
 ```json
 {
@@ -111,7 +113,7 @@ cargo build --release
 }
 ```
 
-#### 多凭据格式（新格式，支持故障转移和自动回写）
+#### JSON 多凭据格式（用于导入）
 
 ```json
 [
@@ -171,7 +173,7 @@ cargo build --release
 或指定配置文件路径：
 
 ```bash
-./target/release/kiro-rs -c /path/to/config.json --credentials /path/to/credentials.json
+./target/release/kiro-rs -c /path/to/config.json --credentials /path/to/credentials.db
 ```
 
 ### 5. 使用 API
@@ -212,9 +214,9 @@ curl http://127.0.0.1:8990/v1/messages \
 | `proxyPassword` | string | - | 代理密码（可选） |
 | `adminApiKey` | string | - | Admin API 密钥，配置后启用凭据管理 API, 填写后才会启用web管理（可选） |
 
-### credentials.json
+### credentials.db (SQLite)
 
-支持单对象格式（向后兼容）或数组格式（多凭据）。
+默认使用 `data/credentials.db`，表名为 `credentials`。字段含义如下（对应 JSON 兼容字段）：
 
 | 字段 | 类型 | 描述                      |
 |------|------|-------------------------|
@@ -370,7 +372,7 @@ RUST_LOG=debug ./target/release/kiro-rs
 
 ## 注意事项
 
-1. **凭证安全**: 请妥善保管 `credentials.json` 文件，不要提交到版本控制
+1. **凭证安全**: 请妥善保管 `data/credentials.db` 文件，不要提交到版本控制
 2. **Token 刷新**: 服务会自动刷新过期的 Token，无需手动干预
 3. **WebSearch 工具**: 当 `tools` 列表仅包含一个 `web_search` 工具时，会走内置 WebSearch 转换逻辑
 

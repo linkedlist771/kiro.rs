@@ -13,7 +13,9 @@ use std::path::PathBuf;
 
 use crate::http_client::{ProxyConfig, build_client, parse_proxy_url};
 use crate::kiro::machine_id;
-use crate::kiro::model::credentials::KiroCredentials;
+use crate::kiro::model::credentials::{
+    KiroCredentials, is_sqlite_file, is_sqlite_path, persist_credentials_to_sqlite,
+};
 use crate::kiro::model::token_refresh::{
     IdcRefreshRequest, IdcRefreshResponse, RefreshRequest, RefreshResponse,
 };
@@ -849,15 +851,17 @@ impl MultiTokenManager {
     fn persist_credentials(&self) -> anyhow::Result<bool> {
         use anyhow::Context;
 
-        // 仅多凭据格式才回写
-        if !self.is_multiple_format {
-            return Ok(false);
-        }
-
         let path = match &self.credentials_path {
             Some(p) => p,
             None => return Ok(false),
         };
+
+        let is_sqlite = is_sqlite_path(path) || is_sqlite_file(path)?;
+
+        // 非 SQLite 时，仅多凭据格式才回写
+        if !is_sqlite && !self.is_multiple_format {
+            return Ok(false);
+        }
 
         // 收集所有凭据
         let credentials: Vec<KiroCredentials> = {
@@ -871,6 +875,19 @@ impl MultiTokenManager {
                 })
                 .collect()
         };
+
+        if is_sqlite {
+            // 写入 SQLite（在 Tokio runtime 内使用 block_in_place 避免阻塞 worker）
+            if tokio::runtime::Handle::try_current().is_ok() {
+                tokio::task::block_in_place(|| persist_credentials_to_sqlite(path, &credentials))
+                    .with_context(|| format!("回写 SQLite 凭据失败: {:?}", path))?;
+            } else {
+                persist_credentials_to_sqlite(path, &credentials)
+                    .with_context(|| format!("回写 SQLite 凭据失败: {:?}", path))?;
+            }
+            tracing::debug!("已回写凭据到 SQLite: {:?}", path);
+            return Ok(true);
+        }
 
         // 序列化为 pretty JSON
         let json = serde_json::to_string_pretty(&credentials).context("序列化凭据失败")?;

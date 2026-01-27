@@ -3,9 +3,11 @@
 //! 支持从 Kiro IDE 的凭证文件加载，使用 Social 认证方式
 //! 支持单凭据和多凭据配置格式
 
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 
 /// Kiro OAuth 凭证
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -103,7 +105,18 @@ impl CredentialsConfig {
 
         // 文件不存在时返回空数组
         if !path.exists() {
+            if is_sqlite_path(path) {
+                if let Some(creds) = try_migrate_legacy_json(path)? {
+                    return Ok(CredentialsConfig::Multiple(creds));
+                }
+            }
             return Ok(CredentialsConfig::Multiple(vec![]));
+        }
+
+        // SQLite 文件优先处理
+        if is_sqlite_path(path) || is_sqlite_file(path)? {
+            let credentials = load_credentials_from_sqlite(path)?;
+            return Ok(CredentialsConfig::Multiple(credentials));
         }
 
         let content = fs::read_to_string(path)?;
@@ -160,7 +173,7 @@ impl CredentialsConfig {
 impl KiroCredentials {
     /// 获取默认凭证文件路径
     pub fn default_credentials_path() -> &'static str {
-        "credentials.json"
+        "data/credentials.db"
     }
 
     /// 从 JSON 字符串解析凭证
@@ -194,6 +207,160 @@ impl KiroCredentials {
             self.auth_method = Some(canonical.to_string());
         }
     }
+}
+
+pub(crate) fn is_sqlite_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|e| e.to_str()).map(|s| s.to_ascii_lowercase()).as_deref(),
+        Some("db") | Some("sqlite") | Some("sqlite3")
+    )
+}
+
+pub(crate) fn is_sqlite_file(path: &Path) -> anyhow::Result<bool> {
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let mut file = fs::File::open(path)?;
+    let mut header = [0u8; 16];
+    let n = std::io::Read::read(&mut file, &mut header)?;
+    if n < header.len() {
+        return Ok(false);
+    }
+    Ok(&header == b"SQLite format 3\0")
+}
+
+fn ensure_parent_dir(path: &Path) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    Ok(())
+}
+
+fn init_schema(conn: &Connection) -> anyhow::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS credentials (
+            id INTEGER PRIMARY KEY,
+            access_token TEXT,
+            refresh_token TEXT,
+            profile_arn TEXT,
+            expires_at TEXT,
+            auth_method TEXT,
+            client_id TEXT,
+            client_secret TEXT,
+            priority INTEGER NOT NULL DEFAULT 0,
+            region TEXT,
+            machine_id TEXT,
+            proxy_url TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_credentials_priority ON credentials(priority);",
+    )?;
+    Ok(())
+}
+
+pub(crate) fn load_credentials_from_sqlite(path: &Path) -> anyhow::Result<Vec<KiroCredentials>> {
+    ensure_parent_dir(path)?;
+    let conn = Connection::open(path)?;
+    init_schema(&conn)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, access_token, refresh_token, profile_arn, expires_at, auth_method, \
+         client_id, client_secret, priority, region, machine_id, proxy_url \
+         FROM credentials ORDER BY priority ASC, id ASC",
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        let id: Option<i64> = row.get(0)?;
+        let priority: Option<i64> = row.get(8)?;
+        Ok(KiroCredentials {
+            id: id.map(|v| v as u64),
+            access_token: row.get(1)?,
+            refresh_token: row.get(2)?,
+            profile_arn: row.get(3)?,
+            expires_at: row.get(4)?,
+            auth_method: row.get(5)?,
+            client_id: row.get(6)?,
+            client_secret: row.get(7)?,
+            priority: priority.unwrap_or(0).max(0) as u32,
+            region: row.get(9)?,
+            machine_id: row.get(10)?,
+            proxy_url: row.get(11)?,
+        })
+    })?;
+
+    let mut credentials = Vec::new();
+    for row in rows {
+        credentials.push(row?);
+    }
+    Ok(credentials)
+}
+
+pub(crate) fn persist_credentials_to_sqlite(
+    path: &Path,
+    credentials: &[KiroCredentials],
+) -> anyhow::Result<()> {
+    ensure_parent_dir(path)?;
+    let mut conn = Connection::open(path)?;
+    init_schema(&conn)?;
+
+    let tx = conn.transaction()?;
+    tx.execute("DELETE FROM credentials", [])?;
+
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO credentials (
+                id, access_token, refresh_token, profile_arn, expires_at, auth_method,
+                client_id, client_secret, priority, region, machine_id, proxy_url
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        )?;
+
+        for cred in credentials {
+            let id = cred.id.map(|v| v as i64);
+            stmt.execute(params![
+                id,
+                cred.access_token.as_deref(),
+                cred.refresh_token.as_deref(),
+                cred.profile_arn.as_deref(),
+                cred.expires_at.as_deref(),
+                cred.auth_method.as_deref(),
+                cred.client_id.as_deref(),
+                cred.client_secret.as_deref(),
+                i64::from(cred.priority),
+                cred.region.as_deref(),
+                cred.machine_id.as_deref(),
+                cred.proxy_url.as_deref(),
+            ])?;
+        }
+    }
+
+    tx.commit()?;
+    Ok(())
+}
+
+fn try_migrate_legacy_json(path: &Path) -> anyhow::Result<Option<Vec<KiroCredentials>>> {
+    let legacy_path = PathBuf::from("credentials.json");
+    if !legacy_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&legacy_path)?;
+    if content.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let config: CredentialsConfig = serde_json::from_str(&content)?;
+    let mut credentials = config.into_sorted_credentials();
+    for cred in &mut credentials {
+        cred.canonicalize_auth_method();
+    }
+
+    if let Err(e) = persist_credentials_to_sqlite(path, &credentials) {
+        tracing::warn!("迁移 credentials.json 到 SQLite 失败: {}", e);
+    }
+
+    Ok(Some(credentials))
 }
 
 #[cfg(test)]
@@ -258,7 +425,7 @@ mod tests {
     fn test_default_credentials_path() {
         assert_eq!(
             KiroCredentials::default_credentials_path(),
-            "credentials.json"
+            "data/credentials.db"
         );
     }
 
