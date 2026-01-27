@@ -86,7 +86,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
             {/* Refresh Token */}
             <div className="space-y-2">
               <label htmlFor="refreshToken" className="text-sm font-medium">

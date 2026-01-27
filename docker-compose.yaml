@@ -1,7 +1,7 @@
 
 services:
   kiro_rs:
-    image: ubuntu:22.04
+    image: llinkedlist/kiro_rs:latest
     container_name: kiro_rs
     ports:
       - "8990:8990"
@@ -14,7 +14,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 6G
+          memory: 1G
         reservations:
           memory: 512M
     restart: always

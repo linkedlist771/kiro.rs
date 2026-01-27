@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # 占位的
-tail -f /dev/null
+# tail -f /dev/null
 
 
-# # target/release/./kiro-rs
-# PATH="./kiro-rs-ubuntu"
+# target/release/./kiro-rs
+PATH="./kiro-rs-ubuntu"
 
-# # run the command
-# exec $PATH
+# run the command
+exec $PATH
