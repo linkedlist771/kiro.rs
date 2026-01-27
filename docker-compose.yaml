@@ -1,7 +1,7 @@
 
 services:
   kiro_rs:
-    image: ubuntu/rust:1.84-25.04_edge
+    image: llinkedlist/claude-auditlimit:latest
     container_name: kiro_rs
     ports:
       - "8990:8990"
