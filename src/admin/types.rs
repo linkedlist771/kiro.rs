@@ -42,6 +42,10 @@ pub struct CredentialStatusItem {
     pub proxy_url: Option<String>,
     /// 邮箱（可选，仅用于标识/显示）
     pub email: Option<String>,
+    /// 今日调用次数
+    pub daily_count: u64,
+    /// 总调用次数
+    pub total_count: u64,
 }
 
 // ============ 操作请求 ============

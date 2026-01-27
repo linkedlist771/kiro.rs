@@ -41,6 +41,8 @@ impl AdminService {
                 has_profile_arn: entry.has_profile_arn,
                 proxy_url: entry.proxy_url,
                 email: entry.email,
+                daily_count: entry.daily_count,
+                total_count: entry.total_count,
             })
             .collect();
 

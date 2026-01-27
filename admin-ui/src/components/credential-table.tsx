@@ -11,7 +11,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { CredentialStatusItem } from '@/types/api'
+import type { CredentialStatusItem, BalanceResponse } from '@/types/api'
 import {
   useDeleteCredential,
   useResetFailure,
@@ -19,6 +19,7 @@ import {
   useSetPriority,
   useSetProxy,
 } from '@/hooks/use-credentials'
+import { getCredentialBalance } from '@/api/credentials'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -32,6 +33,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Progress } from '@/components/ui/progress'
 
 interface CredentialTableProps {
   credentials: CredentialStatusItem[]
@@ -74,12 +76,48 @@ function CredentialRow({ credential, onViewBalance }: CredentialRowProps) {
   const [editingProxy, setEditingProxy] = useState(false)
   const [proxyValue, setProxyValue] = useState(credential.proxyUrl || '')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [balance, setBalance] = useState<BalanceResponse | null>(null)
+  const [balanceLoading, setBalanceLoading] = useState(true)
 
   const setDisabled = useSetDisabled()
   const setPriority = useSetPriority()
   const setProxy = useSetProxy()
   const resetFailure = useResetFailure()
   const deleteCredential = useDeleteCredential()
+
+  // 获取余额信息
+  useEffect(() => {
+    let cancelled = false
+    const fetchBalance = async () => {
+      if (credential.disabled) {
+        setBalance(null)
+        setBalanceLoading(false)
+        return
+      }
+      try {
+        setBalanceLoading(true)
+        const data = await getCredentialBalance(credential.id)
+        if (!cancelled) {
+          setBalance(data)
+        }
+      } catch {
+        if (!cancelled) {
+          setBalance(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setBalanceLoading(false)
+        }
+      }
+    }
+    fetchBalance()
+    // 每 60 秒刷新一次余额
+    const interval = setInterval(fetchBalance, 60000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [credential.id, credential.disabled])
 
   useEffect(() => {
     if (!editingPriority) {
@@ -271,13 +309,43 @@ function CredentialRow({ credential, onViewBalance }: CredentialRowProps) {
             {credential.failureCount}
           </span>
         </TableCell>
-        <TableCell className="min-w-[140px]">
-          <span className="text-sm">{formatAuthMethodLabel(credential.authMethod)}</span>
+        <TableCell className="text-center">
+          <span className="text-sm font-semibold text-blue-600">
+            {credential.dailyCount}
+          </span>
         </TableCell>
-        <TableCell className="min-w-[120px]">
+        <TableCell className="text-center">
+          <span className="text-sm font-semibold text-emerald-600">
+            {credential.totalCount}
+          </span>
+        </TableCell>
+        <TableCell className="min-w-[180px]">
+          {credential.disabled ? (
+            <span className="text-xs text-muted-foreground">已禁用</span>
+          ) : balanceLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-3 w-3 border-b border-primary"></div>
+              <span className="text-xs text-muted-foreground">加载中</span>
+            </div>
+          ) : balance ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">${balance.currentUsage.toFixed(0)}</span>
+                <span className="text-muted-foreground">${balance.usageLimit.toFixed(0)}</span>
+              </div>
+              <Progress value={balance.usagePercentage} className="h-2" />
+              <div className="text-xs text-center text-muted-foreground">
+                剩余 ${balance.remaining.toFixed(0)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">无法获取</span>
+          )}
+        </TableCell>
+        <TableCell>
           <span className={cn('text-sm', expiry.tone)}>{expiry.label}</span>
         </TableCell>
-        <TableCell className="min-w-[260px]">
+        <TableCell className="min-w-[200px]">
           {editingProxy ? (
             <div className="flex items-center gap-2">
               <Input
@@ -429,7 +497,7 @@ function CredentialRow({ credential, onViewBalance }: CredentialRowProps) {
 export function CredentialTable({ credentials, onViewBalance }: CredentialTableProps) {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/80 shadow-sm backdrop-blur">
-      <Table className="min-w-[980px]">
+      <Table className="min-w-[1100px]">
         <TableHeader>
           <TableRow>
             <TableHead>凭据</TableHead>
@@ -437,7 +505,15 @@ export function CredentialTable({ credentials, onViewBalance }: CredentialTableP
             <TableHead>状态</TableHead>
             <TableHead>优先级</TableHead>
             <TableHead>失败</TableHead>
-            <TableHead>认证方式</TableHead>
+            <TableHead className="text-center">
+              <div>今日</div>
+              <div className="text-xs text-muted-foreground">次数</div>
+            </TableHead>
+            <TableHead className="text-center">
+              <div>总计</div>
+              <div className="text-xs text-muted-foreground">次数</div>
+            </TableHead>
+            <TableHead className="min-w-[180px]">额度</TableHead>
             <TableHead>Token</TableHead>
             <TableHead>代理</TableHead>
             <TableHead className="text-right">操作</TableHead>

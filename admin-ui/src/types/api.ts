@@ -18,6 +18,8 @@ export interface CredentialStatusItem {
   hasProfileArn: boolean
   proxyUrl: string | null
   email: string | null
+  dailyCount: number
+  totalCount: number
 }
 
 // 余额响应

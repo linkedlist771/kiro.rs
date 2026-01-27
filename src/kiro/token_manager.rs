@@ -431,6 +431,10 @@ pub struct CredentialEntrySnapshot {
     pub proxy_url: Option<String>,
     /// 邮箱（可选，仅用于标识/显示）
     pub email: Option<String>,
+    /// 今日调用次数
+    pub daily_count: u64,
+    /// 总调用次数
+    pub total_count: u64,
 }
 
 /// 凭据管理器状态快照
@@ -918,6 +922,13 @@ impl MultiTokenManager {
             entry.failure_count = 0;
             tracing::debug!("凭据 #{} API 调用成功", id);
         }
+
+        // 增加调用次数
+        if let Some(path) = &self.credentials_path {
+            if let Err(e) = crate::kiro::model::credentials::increment_usage_count(path, id) {
+                tracing::warn!("增加凭据 #{} 调用次数失败: {}", id, e);
+            }
+        }
     }
 
     /// 报告指定凭据 API 调用失败
@@ -1066,25 +1077,35 @@ impl MultiTokenManager {
         let current_id = *self.current_id.lock();
         let available = entries.iter().filter(|e| !e.disabled).count();
 
+        // 获取所有凭据的调用次数
+        let usage_counts = self.credentials_path.as_ref()
+            .and_then(|path| crate::kiro::model::credentials::get_all_usage_counts(path).ok())
+            .unwrap_or_default();
+
         ManagerSnapshot {
             entries: entries
                 .iter()
-                .map(|e| CredentialEntrySnapshot {
-                    id: e.id,
-                    priority: e.credentials.priority,
-                    disabled: e.disabled,
-                    failure_count: e.failure_count,
-                    auth_method: e.credentials.auth_method.as_deref().map(|m| {
-                        if m.eq_ignore_ascii_case("builder-id") || m.eq_ignore_ascii_case("iam") {
-                            "idc".to_string()
-                        } else {
-                            m.to_string()
-                        }
-                    }),
-                    has_profile_arn: e.credentials.profile_arn.is_some(),
-                    expires_at: e.credentials.expires_at.clone(),
-                    proxy_url: e.credentials.proxy_url.clone(),
-                    email: e.credentials.email.clone(),
+                .map(|e| {
+                    let counts = usage_counts.get(&e.id).cloned().unwrap_or_default();
+                    CredentialEntrySnapshot {
+                        id: e.id,
+                        priority: e.credentials.priority,
+                        disabled: e.disabled,
+                        failure_count: e.failure_count,
+                        auth_method: e.credentials.auth_method.as_deref().map(|m| {
+                            if m.eq_ignore_ascii_case("builder-id") || m.eq_ignore_ascii_case("iam") {
+                                "idc".to_string()
+                            } else {
+                                m.to_string()
+                            }
+                        }),
+                        has_profile_arn: e.credentials.profile_arn.is_some(),
+                        expires_at: e.credentials.expires_at.clone(),
+                        proxy_url: e.credentials.proxy_url.clone(),
+                        email: e.credentials.email.clone(),
+                        daily_count: counts.daily_count,
+                        total_count: counts.total_count,
+                    }
                 })
                 .collect(),
             current_id,

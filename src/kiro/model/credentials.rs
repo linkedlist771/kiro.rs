@@ -258,12 +258,19 @@ fn init_schema(conn: &Connection) -> anyhow::Result<()> {
             region TEXT,
             machine_id TEXT,
             proxy_url TEXT,
-            email TEXT
+            email TEXT,
+            daily_count INTEGER NOT NULL DEFAULT 0,
+            total_count INTEGER NOT NULL DEFAULT 0,
+            last_count_date TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_credentials_priority ON credentials(priority);",
     )?;
     // 迁移：为旧表添加 email 列（如果不存在）
     let _ = conn.execute("ALTER TABLE credentials ADD COLUMN email TEXT", []);
+    // 迁移：为旧表添加调用次数相关列（如果不存在）
+    let _ = conn.execute("ALTER TABLE credentials ADD COLUMN daily_count INTEGER NOT NULL DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE credentials ADD COLUMN total_count INTEGER NOT NULL DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE credentials ADD COLUMN last_count_date TEXT", []);
     Ok(())
 }
 
@@ -346,6 +353,120 @@ pub(crate) fn persist_credentials_to_sqlite(
 
     tx.commit()?;
     Ok(())
+}
+
+/// 凭据调用次数统计
+#[derive(Debug, Clone, Default)]
+pub struct CredentialUsageCount {
+    pub daily_count: u64,
+    pub total_count: u64,
+    pub last_count_date: Option<String>,
+}
+
+/// 增加凭据调用次数
+///
+/// 如果日期变化，重置 daily_count
+pub fn increment_usage_count(path: &Path, id: u64) -> anyhow::Result<()> {
+    ensure_parent_dir(path)?;
+    let conn = Connection::open(path)?;
+    init_schema(&conn)?;
+
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    // 获取当前的 last_count_date
+    let last_date: Option<String> = conn.query_row(
+        "SELECT last_count_date FROM credentials WHERE id = ?1",
+        params![id as i64],
+        |row| row.get(0),
+    ).ok();
+
+    if last_date.as_ref() == Some(&today) {
+        // 同一天，增加 daily_count 和 total_count
+        conn.execute(
+            "UPDATE credentials SET daily_count = daily_count + 1, total_count = total_count + 1 WHERE id = ?1",
+            params![id as i64],
+        )?;
+    } else {
+        // 新的一天，重置 daily_count 为 1，增加 total_count
+        conn.execute(
+            "UPDATE credentials SET daily_count = 1, total_count = total_count + 1, last_count_date = ?2 WHERE id = ?1",
+            params![id as i64, today],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// 获取凭据调用次数
+pub fn get_usage_count(path: &Path, id: u64) -> anyhow::Result<CredentialUsageCount> {
+    ensure_parent_dir(path)?;
+    let conn = Connection::open(path)?;
+    init_schema(&conn)?;
+
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    let result = conn.query_row(
+        "SELECT daily_count, total_count, last_count_date FROM credentials WHERE id = ?1",
+        params![id as i64],
+        |row| {
+            let daily_count: i64 = row.get(0)?;
+            let total_count: i64 = row.get(1)?;
+            let last_count_date: Option<String> = row.get(2)?;
+            Ok((daily_count, total_count, last_count_date))
+        },
+    )?;
+
+    // 如果日期不是今天，daily_count 应该显示为 0
+    let daily_count = if result.2.as_ref() == Some(&today) {
+        result.0 as u64
+    } else {
+        0
+    };
+
+    Ok(CredentialUsageCount {
+        daily_count,
+        total_count: result.1 as u64,
+        last_count_date: result.2,
+    })
+}
+
+/// 获取所有凭据的调用次数
+pub fn get_all_usage_counts(path: &Path) -> anyhow::Result<std::collections::HashMap<u64, CredentialUsageCount>> {
+    ensure_parent_dir(path)?;
+    let conn = Connection::open(path)?;
+    init_schema(&conn)?;
+
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    let mut stmt = conn.prepare(
+        "SELECT id, daily_count, total_count, last_count_date FROM credentials",
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        let id: i64 = row.get(0)?;
+        let daily_count: i64 = row.get(1)?;
+        let total_count: i64 = row.get(2)?;
+        let last_count_date: Option<String> = row.get(3)?;
+        Ok((id, daily_count, total_count, last_count_date))
+    })?;
+
+    let mut counts = std::collections::HashMap::new();
+    for row in rows {
+        let (id, daily_count, total_count, last_count_date) = row?;
+        // 如果日期不是今天，daily_count 应该显示为 0
+        let actual_daily_count = if last_count_date.as_ref() == Some(&today) {
+            daily_count as u64
+        } else {
+            0
+        };
+        counts.insert(id as u64, CredentialUsageCount {
+            daily_count: actual_daily_count,
+            total_count: total_count as u64,
+            last_count_date,
+        });
+    }
+
+    Ok(counts)
 }
 
 fn try_migrate_legacy_json(path: &Path) -> anyhow::Result<Option<Vec<KiroCredentials>>> {
