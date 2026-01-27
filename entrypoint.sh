@@ -5,7 +5,7 @@
 
 
 # target/release/./kiro-rs
-PATH="./kiro-rs-ubuntu"
+PATH="./kiro-rs"
 
 # run the command
 exec $PATH
