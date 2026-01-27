@@ -1,7 +1,7 @@
 
 services:
   kiro_rs:
-    image: llinkedlist/claude-auditlimit:latest
+    image: ubuntu:22.04
     container_name: kiro_rs
     ports:
       - "8990:8990"
