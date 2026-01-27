@@ -57,6 +57,12 @@ pub struct KiroCredentials {
     /// 未配置时回退到 config.json 的 machineId；都未配置时由 refreshToken 派生
     #[serde(skip_serializing_if = "Option::is_none")]
     pub machine_id: Option<String>,
+
+    /// 凭据级代理 URL（可选）
+    /// 支持格式: socks5://user:pass@host:port, http://host:port 等
+    /// 未配置时回退到 config.json 的全局代理
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy_url: Option<String>,
 }
 
 /// 判断是否为零（用于跳过序列化）
@@ -237,6 +243,7 @@ mod tests {
             priority: 0,
             region: None,
             machine_id: None,
+            proxy_url: None,
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -347,6 +354,7 @@ mod tests {
             priority: 0,
             region: Some("eu-west-1".to_string()),
             machine_id: None,
+            proxy_url: None,
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -369,6 +377,7 @@ mod tests {
             priority: 0,
             region: None,
             machine_id: None,
+            proxy_url: None,
         };
 
         let json = creds.to_pretty_json().unwrap();
@@ -473,6 +482,7 @@ mod tests {
             priority: 3,
             region: Some("us-west-2".to_string()),
             machine_id: Some("c".repeat(64)),
+            proxy_url: None,
         };
 
         let json = original.to_pretty_json().unwrap();
@@ -484,5 +494,100 @@ mod tests {
         assert_eq!(parsed.priority, original.priority);
         assert_eq!(parsed.region, original.region);
         assert_eq!(parsed.machine_id, original.machine_id);
+    }
+
+    // ============ ProxyUrl 字段测试 ============
+
+    #[test]
+    fn test_proxy_url_field_parsing() {
+        let json = r#"{
+            "refreshToken": "test_refresh",
+            "proxyUrl": "socks5://user:pass@127.0.0.1:1080"
+        }"#;
+
+        let creds = KiroCredentials::from_json(json).unwrap();
+        assert_eq!(creds.refresh_token, Some("test_refresh".to_string()));
+        assert_eq!(
+            creds.proxy_url,
+            Some("socks5://user:pass@127.0.0.1:1080".to_string())
+        );
+    }
+
+    #[test]
+    fn test_proxy_url_field_missing_backward_compat() {
+        // 测试向后兼容：不包含 proxyUrl 字段的旧格式 JSON
+        let json = r#"{
+            "refreshToken": "test_refresh",
+            "authMethod": "social"
+        }"#;
+
+        let creds = KiroCredentials::from_json(json).unwrap();
+        assert_eq!(creds.refresh_token, Some("test_refresh".to_string()));
+        assert_eq!(creds.proxy_url, None);
+    }
+
+    #[test]
+    fn test_proxy_url_field_serialization() {
+        let creds = KiroCredentials {
+            id: None,
+            access_token: None,
+            refresh_token: Some("test".to_string()),
+            profile_arn: None,
+            expires_at: None,
+            auth_method: None,
+            client_id: None,
+            client_secret: None,
+            priority: 0,
+            region: None,
+            machine_id: None,
+            proxy_url: Some("http://proxy.example.com:8080".to_string()),
+        };
+
+        let json = creds.to_pretty_json().unwrap();
+        assert!(json.contains("proxyUrl"));
+        assert!(json.contains("http://proxy.example.com:8080"));
+    }
+
+    #[test]
+    fn test_proxy_url_field_none_not_serialized() {
+        let creds = KiroCredentials {
+            id: None,
+            access_token: None,
+            refresh_token: Some("test".to_string()),
+            profile_arn: None,
+            expires_at: None,
+            auth_method: None,
+            client_id: None,
+            client_secret: None,
+            priority: 0,
+            region: None,
+            machine_id: None,
+            proxy_url: None,
+        };
+
+        let json = creds.to_pretty_json().unwrap();
+        assert!(!json.contains("proxyUrl"));
+    }
+
+    #[test]
+    fn test_multiple_credentials_with_different_proxies() {
+        let json = r#"[
+            {"refreshToken": "t1", "proxyUrl": "socks5://127.0.0.1:1080"},
+            {"refreshToken": "t2", "proxyUrl": "http://proxy.example.com:8080"},
+            {"refreshToken": "t3"}
+        ]"#;
+
+        let config: CredentialsConfig = serde_json::from_str(json).unwrap();
+        let list = config.into_sorted_credentials();
+
+        assert_eq!(
+            list[0].proxy_url,
+            Some("socks5://127.0.0.1:1080".to_string())
+        );
+        assert_eq!(
+            list[1].proxy_url,
+            Some("http://proxy.example.com:8080".to_string())
+        );
+        assert_eq!(list[2].proxy_url, None);
     }
 }

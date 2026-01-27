@@ -16,6 +16,7 @@ export interface CredentialStatusItem {
   expiresAt: string | null
   authMethod: string | null
   hasProfileArn: boolean
+  proxyUrl: string | null
 }
 
 // 余额响应
@@ -52,6 +53,10 @@ export interface SetPriorityRequest {
   priority: number
 }
 
+export interface SetProxyRequest {
+  proxyUrl: string | null
+}
+
 // 添加凭据请求
 export interface AddCredentialRequest {
   refreshToken: string
@@ -60,6 +65,7 @@ export interface AddCredentialRequest {
   clientSecret?: string
   priority?: number
   region?: string
+  proxyUrl?: string
 }
 
 // 添加凭据响应

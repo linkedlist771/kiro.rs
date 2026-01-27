@@ -8,7 +8,7 @@ use axum::{
 
 use super::{
     middleware::AdminState,
-    types::{AddCredentialRequest, SetDisabledRequest, SetPriorityRequest, SuccessResponse},
+    types::{AddCredentialRequest, SetDisabledRequest, SetPriorityRequest, SetProxyRequest, SuccessResponse},
 };
 
 /// GET /api/admin/credentials
@@ -63,6 +63,25 @@ pub async fn reset_failure_count(
             id
         )))
         .into_response(),
+        Err(e) => (e.status_code(), Json(e.into_response())).into_response(),
+    }
+}
+
+/// POST /api/admin/credentials/:id/proxy
+/// 设置凭据代理 URL
+pub async fn set_credential_proxy(
+    State(state): State<AdminState>,
+    Path(id): Path<u64>,
+    Json(payload): Json<SetProxyRequest>,
+) -> impl IntoResponse {
+    match state.service.set_proxy(id, payload.proxy_url.clone()) {
+        Ok(_) => {
+            let msg = match payload.proxy_url {
+                Some(url) if !url.trim().is_empty() => format!("凭据 #{} 代理已设置", id),
+                _ => format!("凭据 #{} 代理已清除", id),
+            };
+            Json(SuccessResponse::new(msg)).into_response()
+        }
         Err(e) => (e.status_code(), Json(e.into_response())).into_response(),
     }
 }

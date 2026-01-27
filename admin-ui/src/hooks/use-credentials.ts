@@ -3,6 +3,7 @@ import {
   getCredentials,
   setCredentialDisabled,
   setCredentialPriority,
+  setCredentialProxy,
   resetCredentialFailure,
   getCredentialBalance,
   addCredential,
@@ -47,6 +48,18 @@ export function useSetPriority() {
   return useMutation({
     mutationFn: ({ id, priority }: { id: number; priority: number }) =>
       setCredentialPriority(id, priority),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credentials'] })
+    },
+  })
+}
+
+// 设置代理 URL
+export function useSetProxy() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, proxyUrl }: { id: number; proxyUrl: string | null }) =>
+      setCredentialProxy(id, proxyUrl),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credentials'] })
     },

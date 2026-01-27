@@ -26,6 +26,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [priority, setPriority] = useState('0')
+  const [proxyUrl, setProxyUrl] = useState('')
 
   const { mutate, isPending } = useAddCredential()
 
@@ -36,6 +37,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
     setClientId('')
     setClientSecret('')
     setPriority('0')
+    setProxyUrl('')
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,6 +63,7 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
         clientId: clientId.trim() || undefined,
         clientSecret: clientSecret.trim() || undefined,
         priority: parseInt(priority) || 0,
+        proxyUrl: proxyUrl.trim() || undefined,
       },
       {
         onSuccess: (data) => {
@@ -176,6 +179,23 @@ export function AddCredentialDialog({ open, onOpenChange }: AddCredentialDialogP
               />
               <p className="text-xs text-muted-foreground">
                 数字越小优先级越高，默认为 0
+              </p>
+            </div>
+
+            {/* 代理 */}
+            <div className="space-y-2">
+              <label htmlFor="proxyUrl" className="text-sm font-medium">
+                自定义代理（可选）
+              </label>
+              <Input
+                id="proxyUrl"
+                placeholder="例如 socks5://user:pass@host:port#备注"
+                value={proxyUrl}
+                onChange={(e) => setProxyUrl(e.target.value)}
+                disabled={isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                留空则使用全局代理；支持 http/https/socks/socks5
               </p>
             </div>
           </div>

@@ -119,7 +119,8 @@ cargo build --release
       "refreshToken": "第一个凭据的刷新token",
       "expiresAt": "2025-12-31T02:32:45.144Z",
       "authMethod": "social",
-      "priority": 0
+      "priority": 0,
+      "proxyUrl": "socks5://user:pass@127.0.0.1:1080#home"
    },
    {
       "refreshToken": "第二个凭据的刷新token",
@@ -140,6 +141,7 @@ cargo build --release
 > - 多凭据格式下 Token 刷新后自动回写到源文件
 > - 可选的 `region` 字段：用于 OIDC token 刷新时指定 endpoint 区域，未配置时回退到 config.json 的 region
 > - 可选的 `machineId` 字段：凭据级机器码；未配置时回退到 config.json 的 machineId；都未配置时由 refreshToken 派生
+> - 可选的 `proxyUrl` 字段：凭据级代理地址；未配置时回退到 config.json 的全局代理
 
 最小启动配置(social):
 ```json
@@ -227,6 +229,7 @@ curl http://127.0.0.1:8990/v1/messages \
 | `priority` | number | 凭据优先级，数字越小越优先，默认为 0（多凭据格式时有效）|
 | `region` | string | 凭据级 region（可选），用于 OIDC token 刷新时指定 endpoint 的区域。未配置时回退到 config.json 的 region。注意：API 调用始终使用 config.json 的 region |
 | `machineId` | string | 凭据级机器码（可选，64位十六进制）。未配置时回退到 config.json 的 machineId；都未配置时由 refreshToken 派生 |
+| `proxyUrl` | string | 凭据级代理地址（可选），未配置时回退到 config.json 的全局代理 |
 
 说明：
 - IdC / Builder-ID / IAM 在本项目里属于同一种登录方式，配置时统一使用 `authMethod: "idc"`

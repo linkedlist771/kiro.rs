@@ -6,6 +6,7 @@ import type {
   SuccessResponse,
   SetDisabledRequest,
   SetPriorityRequest,
+  SetProxyRequest,
   AddCredentialRequest,
   AddCredentialResponse,
 } from '@/types/api'
@@ -53,6 +54,18 @@ export async function setCredentialPriority(
   const { data } = await api.post<SuccessResponse>(
     `/credentials/${id}/priority`,
     { priority } as SetPriorityRequest
+  )
+  return data
+}
+
+// 设置凭据代理 URL
+export async function setCredentialProxy(
+  id: number,
+  proxyUrl: string | null
+): Promise<SuccessResponse> {
+  const { data } = await api.post<SuccessResponse>(
+    `/credentials/${id}/proxy`,
+    { proxyUrl } as SetProxyRequest
   )
   return data
 }

@@ -18,6 +18,7 @@ import type { CredentialStatusItem } from '@/types/api'
 import {
   useSetDisabled,
   useSetPriority,
+  useSetProxy,
   useResetFailure,
   useDeleteCredential,
 } from '@/hooks/use-credentials'
@@ -36,10 +37,13 @@ function formatAuthMethodLabel(authMethod: string | null): string {
 export function CredentialCard({ credential, onViewBalance }: CredentialCardProps) {
   const [editingPriority, setEditingPriority] = useState(false)
   const [priorityValue, setPriorityValue] = useState(String(credential.priority))
+  const [editingProxy, setEditingProxy] = useState(false)
+  const [proxyValue, setProxyValue] = useState(credential.proxyUrl || '')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const setDisabled = useSetDisabled()
   const setPriority = useSetPriority()
+  const setProxy = useSetProxy()
   const resetFailure = useResetFailure()
   const deleteCredential = useDeleteCredential()
 
@@ -69,6 +73,22 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
         onSuccess: (res) => {
           toast.success(res.message)
           setEditingPriority(false)
+        },
+        onError: (err) => {
+          toast.error('操作失败: ' + (err as Error).message)
+        },
+      }
+    )
+  }
+
+  const handleProxyChange = () => {
+    const trimmedProxy = proxyValue.trim()
+    setProxy.mutate(
+      { id: credential.id, proxyUrl: trimmedProxy || null },
+      {
+        onSuccess: (res) => {
+          toast.success(res.message)
+          setEditingProxy(false)
         },
         onError: (err) => {
           toast.error('操作失败: ' + (err as Error).message)
@@ -201,6 +221,53 @@ export function CredentialCard({ credential, onViewBalance }: CredentialCardProp
                 <Badge variant="secondary">有 Profile ARN</Badge>
               </div>
             )}
+            {/* 代理 URL */}
+            <div className="col-span-2">
+              <span className="text-muted-foreground">代理：</span>
+              {editingProxy ? (
+                <div className="inline-flex items-center gap-1 ml-1 w-full mt-1">
+                  <Input
+                    type="text"
+                    value={proxyValue}
+                    onChange={(e) => setProxyValue(e.target.value)}
+                    className="flex-1 h-7 text-sm"
+                    placeholder="例如 socks5://user:pass@host:port"
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={handleProxyChange}
+                    disabled={setProxy.isPending}
+                  >
+                    ✓
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={() => {
+                      setEditingProxy(false)
+                      setProxyValue(credential.proxyUrl || '')
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ) : (
+                <span
+                  className="font-medium cursor-pointer hover:underline ml-1"
+                  onClick={() => setEditingProxy(true)}
+                >
+                  {credential.proxyUrl ? (
+                    <span className="text-xs break-all">{credential.proxyUrl}</span>
+                  ) : (
+                    <span className="text-muted-foreground">使用全局代理</span>
+                  )}
+                  <span className="text-xs text-muted-foreground ml-1">(点击编辑)</span>
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 操作按钮 */}

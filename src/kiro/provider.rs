@@ -6,8 +6,10 @@
 
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONNECTION, CONTENT_TYPE, HOST, HeaderMap, HeaderValue};
+use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
+use std::collections::HashMap;
 use tokio::time::sleep;
 use uuid::Uuid;
 
@@ -30,7 +32,31 @@ const MAX_TOTAL_RETRIES: usize = 9;
 /// 支持多凭据故障转移和重试机制
 pub struct KiroProvider {
     token_manager: Arc<MultiTokenManager>,
-    client: Client,
+    client_cache: Mutex<HashMap<ProxyKey, Client>>,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ProxyKey {
+    url: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+impl ProxyKey {
+    fn from_proxy(proxy: Option<&ProxyConfig>) -> Self {
+        match proxy {
+            Some(proxy) => Self {
+                url: Some(proxy.url.clone()),
+                username: proxy.username.clone(),
+                password: proxy.password.clone(),
+            },
+            None => Self {
+                url: None,
+                username: None,
+                password: None,
+            },
+        }
+    }
 }
 
 impl KiroProvider {
@@ -43,16 +69,30 @@ impl KiroProvider {
     pub fn with_proxy(token_manager: Arc<MultiTokenManager>, proxy: Option<ProxyConfig>) -> Self {
         let client = build_client(proxy.as_ref(), 720, token_manager.config().tls_backend)
             .expect("创建 HTTP 客户端失败");
+        let mut cache = HashMap::new();
+        cache.insert(ProxyKey::from_proxy(proxy.as_ref()), client);
 
         Self {
             token_manager,
-            client,
+            client_cache: Mutex::new(cache),
         }
     }
 
     /// 获取 token_manager 的引用
     pub fn token_manager(&self) -> &MultiTokenManager {
         &self.token_manager
+    }
+
+    fn client_for_proxy(&self, proxy: Option<&ProxyConfig>) -> anyhow::Result<Client> {
+        let key = ProxyKey::from_proxy(proxy);
+        let mut cache = self.client_cache.lock();
+        if let Some(client) = cache.get(&key) {
+            return Ok(client.clone());
+        }
+
+        let client = build_client(proxy, 720, self.token_manager.config().tls_backend)?;
+        cache.insert(key, client.clone());
+        Ok(client)
     }
 
     /// 获取 API 基础 URL
@@ -247,10 +287,16 @@ impl KiroProvider {
                     continue;
                 }
             };
+            let client = match self.client_for_proxy(ctx.proxy.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    last_error = Some(e);
+                    continue;
+                }
+            };
 
             // 发送请求
-            let response = match self
-                .client
+            let response = match client
                 .post(&url)
                 .headers(headers)
                 .body(request_body.to_string())
@@ -376,10 +422,16 @@ impl KiroProvider {
                     continue;
                 }
             };
+            let client = match self.client_for_proxy(ctx.proxy.as_ref()) {
+                Ok(c) => c,
+                Err(e) => {
+                    last_error = Some(e);
+                    continue;
+                }
+            };
 
             // 发送请求
-            let response = match self
-                .client
+            let response = match client
                 .post(&url)
                 .headers(headers)
                 .body(request_body.to_string())
@@ -613,6 +665,7 @@ mod tests {
             id: 1,
             credentials,
             token: "test_token".to_string(),
+            proxy: None,
         };
         let headers = provider.build_headers(&ctx).unwrap();
 

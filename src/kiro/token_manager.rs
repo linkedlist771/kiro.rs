@@ -11,7 +11,7 @@ use tokio::sync::Mutex as TokioMutex;
 
 use std::path::PathBuf;
 
-use crate::http_client::{ProxyConfig, build_client};
+use crate::http_client::{ProxyConfig, build_client, parse_proxy_url};
 use crate::kiro::machine_id;
 use crate::kiro::model::credentials::KiroCredentials;
 use crate::kiro::model::token_refresh::{
@@ -54,8 +54,9 @@ impl TokenManager {
     /// 如果 Token 过期或即将过期，会自动刷新
     pub async fn ensure_valid_token(&mut self) -> anyhow::Result<String> {
         if is_token_expired(&self.credentials) || is_token_expiring_soon(&self.credentials) {
+            let proxy = resolve_proxy_config(&self.credentials, self.proxy.as_ref())?;
             self.credentials =
-                refresh_token(&self.credentials, &self.config, self.proxy.as_ref()).await?;
+                refresh_token(&self.credentials, &self.config, proxy.as_ref()).await?;
 
             // 刷新后再次检查 token 时间有效性
             if is_token_expired(&self.credentials) {
@@ -74,7 +75,8 @@ impl TokenManager {
     /// 调用 getUsageLimits API 查询当前账户的使用额度
     pub async fn get_usage_limits(&mut self) -> anyhow::Result<UsageLimitsResponse> {
         let token = self.ensure_valid_token().await?;
-        get_usage_limits(&self.credentials, &self.config, &token, self.proxy.as_ref()).await
+        let proxy = resolve_proxy_config(&self.credentials, self.proxy.as_ref())?;
+        get_usage_limits(&self.credentials, &self.config, &token, proxy.as_ref()).await
     }
 }
 
@@ -423,6 +425,8 @@ pub struct CredentialEntrySnapshot {
     pub has_profile_arn: bool,
     /// Token 过期时间
     pub expires_at: Option<String>,
+    /// 凭据级代理 URL
+    pub proxy_url: Option<String>,
 }
 
 /// 凭据管理器状态快照
@@ -473,6 +477,31 @@ pub struct CallContext {
     pub credentials: KiroCredentials,
     /// 访问 Token
     pub token: String,
+    /// 代理配置（已解析，包含凭据级覆盖）
+    pub proxy: Option<ProxyConfig>,
+}
+
+fn resolve_proxy_config(
+    credentials: &KiroCredentials,
+    default_proxy: Option<&ProxyConfig>,
+) -> anyhow::Result<Option<ProxyConfig>> {
+    let proxy_url = credentials
+        .proxy_url
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
+
+    if let Some(proxy_url) = proxy_url {
+        let label = credentials
+            .id
+            .map(|id| format!("凭据 #{}", id))
+            .unwrap_or_else(|| "凭据".to_string());
+        let parsed = parse_proxy_url(proxy_url)
+            .map_err(|e| anyhow::anyhow!("{} proxyUrl 无效: {}", label, e))?;
+        return Ok(Some(parsed));
+    }
+
+    Ok(default_proxy.cloned())
 }
 
 impl MultiTokenManager {
@@ -762,8 +791,8 @@ impl MultiTokenManager {
 
             if is_token_expired(&current_creds) || is_token_expiring_soon(&current_creds) {
                 // 确实需要刷新
-                let new_creds =
-                    refresh_token(&current_creds, &self.config, self.proxy.as_ref()).await?;
+                let proxy = resolve_proxy_config(&current_creds, self.proxy.as_ref())?;
+                let new_creds = refresh_token(&current_creds, &self.config, proxy.as_ref()).await?;
 
                 if is_token_expired(&new_creds) {
                     anyhow::bail!("刷新后的 Token 仍然无效或已过期");
@@ -797,10 +826,13 @@ impl MultiTokenManager {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("没有可用的 accessToken"))?;
 
+        let proxy = resolve_proxy_config(&creds, self.proxy.as_ref())?;
+
         Ok(CallContext {
             id,
             credentials: creds,
             token,
+            proxy,
         })
     }
 
@@ -1000,7 +1032,7 @@ impl MultiTokenManager {
             &ctx.credentials,
             &self.config,
             &ctx.token,
-            self.proxy.as_ref(),
+            ctx.proxy.as_ref(),
         )
         .await
     }
@@ -1032,6 +1064,7 @@ impl MultiTokenManager {
                     }),
                     has_profile_arn: e.credentials.profile_arn.is_some(),
                     expires_at: e.credentials.expires_at.clone(),
+                    proxy_url: e.credentials.proxy_url.clone(),
                 })
                 .collect(),
             current_id,
@@ -1082,6 +1115,31 @@ impl MultiTokenManager {
         Ok(())
     }
 
+    /// 设置凭据代理 URL（Admin API）
+    ///
+    /// 传入 None 或空字符串表示清除代理配置
+    pub fn set_proxy(&self, id: u64, proxy_url: Option<String>) -> anyhow::Result<()> {
+        // 处理空字符串为 None
+        let proxy_url = proxy_url.filter(|s| !s.trim().is_empty());
+
+        // 如果有代理 URL，验证格式
+        if let Some(ref url) = proxy_url {
+            crate::http_client::parse_proxy_url(url)?;
+        }
+
+        {
+            let mut entries = self.entries.lock();
+            let entry = entries
+                .iter_mut()
+                .find(|e| e.id == id)
+                .ok_or_else(|| anyhow::anyhow!("凭据不存在: {}", id))?;
+            entry.credentials.proxy_url = proxy_url;
+        }
+        // 持久化更改
+        self.persist_credentials()?;
+        Ok(())
+    }
+
     /// 重置凭据失败计数并重新启用（Admin API）
     pub fn reset_and_enable(&self, id: u64) -> anyhow::Result<()> {
         {
@@ -1109,6 +1167,7 @@ impl MultiTokenManager {
                 .map(|e| e.credentials.clone())
                 .ok_or_else(|| anyhow::anyhow!("凭据不存在: {}", id))?
         };
+        let proxy = resolve_proxy_config(&credentials, self.proxy.as_ref())?;
 
         // 检查是否需要刷新 token
         let needs_refresh = is_token_expired(&credentials) || is_token_expiring_soon(&credentials);
@@ -1125,8 +1184,7 @@ impl MultiTokenManager {
             };
 
             if is_token_expired(&current_creds) || is_token_expiring_soon(&current_creds) {
-                let new_creds =
-                    refresh_token(&current_creds, &self.config, self.proxy.as_ref()).await?;
+                let new_creds = refresh_token(&current_creds, &self.config, proxy.as_ref()).await?;
                 {
                     let mut entries = self.entries.lock();
                     if let Some(entry) = entries.iter_mut().find(|e| e.id == id) {
@@ -1160,7 +1218,7 @@ impl MultiTokenManager {
                 .ok_or_else(|| anyhow::anyhow!("凭据不存在: {}", id))?
         };
 
-        get_usage_limits(&credentials, &self.config, &token, self.proxy.as_ref()).await
+        get_usage_limits(&credentials, &self.config, &token, proxy.as_ref()).await
     }
 
     /// 添加新凭据（Admin API）
@@ -1180,8 +1238,8 @@ impl MultiTokenManager {
         validate_refresh_token(&new_cred)?;
 
         // 2. 尝试刷新 Token 验证凭据有效性
-        let mut validated_cred =
-            refresh_token(&new_cred, &self.config, self.proxy.as_ref()).await?;
+        let proxy = resolve_proxy_config(&new_cred, self.proxy.as_ref())?;
+        let mut validated_cred = refresh_token(&new_cred, &self.config, proxy.as_ref()).await?;
 
         // 3. 分配新 ID
         let new_id = {
@@ -1203,6 +1261,7 @@ impl MultiTokenManager {
         validated_cred.client_secret = new_cred.client_secret;
         validated_cred.region = new_cred.region;
         validated_cred.machine_id = new_cred.machine_id;
+        validated_cred.proxy_url = new_cred.proxy_url;
 
         {
             let mut entries = self.entries.lock();

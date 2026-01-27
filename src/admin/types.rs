@@ -38,6 +38,8 @@ pub struct CredentialStatusItem {
     pub auth_method: Option<String>,
     /// 是否有 Profile ARN
     pub has_profile_arn: bool,
+    /// 凭据级代理 URL（可选）
+    pub proxy_url: Option<String>,
 }
 
 // ============ 操作请求 ============
@@ -56,6 +58,14 @@ pub struct SetDisabledRequest {
 pub struct SetPriorityRequest {
     /// 新优先级值
     pub priority: u32,
+}
+
+/// 修改代理 URL 请求
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetProxyRequest {
+    /// 代理 URL（传空字符串或 null 表示清除代理）
+    pub proxy_url: Option<String>,
 }
 
 /// 添加凭据请求
@@ -86,6 +96,11 @@ pub struct AddCredentialRequest {
     /// 凭据级 Machine ID（可选，64 位字符串）
     /// 未配置时回退到 config.json 的 machineId
     pub machine_id: Option<String>,
+
+    /// 凭据级代理 URL（可选）
+    /// 支持格式: socks5://user:pass@host:port, http://host:port 等
+    /// 未配置时回退到 config.json 的全局代理
+    pub proxy_url: Option<String>,
 }
 
 fn default_auth_method() -> String {

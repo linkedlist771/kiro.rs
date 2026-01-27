@@ -39,6 +39,7 @@ impl AdminService {
                 expires_at: entry.expires_at,
                 auth_method: entry.auth_method,
                 has_profile_arn: entry.has_profile_arn,
+                proxy_url: entry.proxy_url,
             })
             .collect();
 
@@ -75,6 +76,13 @@ impl AdminService {
         self.token_manager
             .set_priority(id, priority)
             .map_err(|e| self.classify_error(e, id))
+    }
+
+    /// 设置凭据代理 URL
+    pub fn set_proxy(&self, id: u64, proxy_url: Option<String>) -> Result<(), AdminServiceError> {
+        self.token_manager
+            .set_proxy(id, proxy_url)
+            .map_err(|e| self.classify_proxy_error(e, id))
     }
 
     /// 重置失败计数并重新启用
@@ -130,6 +138,7 @@ impl AdminService {
             priority: req.priority,
             region: req.region,
             machine_id: req.machine_id,
+            proxy_url: req.proxy_url,
         };
 
         // 调用 token_manager 添加凭据
@@ -226,6 +235,18 @@ impl AdminService {
         if msg.contains("不存在") {
             AdminServiceError::NotFound { id }
         } else if msg.contains("只能删除已禁用的凭据") {
+            AdminServiceError::InvalidCredential(msg)
+        } else {
+            AdminServiceError::InternalError(msg)
+        }
+    }
+
+    /// 分类代理设置错误
+    fn classify_proxy_error(&self, e: anyhow::Error, id: u64) -> AdminServiceError {
+        let msg = e.to_string();
+        if msg.contains("不存在") {
+            AdminServiceError::NotFound { id }
+        } else if msg.contains("不支持的代理协议") || msg.contains("缺少") {
             AdminServiceError::InvalidCredential(msg)
         } else {
             AdminServiceError::InternalError(msg)
