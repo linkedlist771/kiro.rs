@@ -1,6 +1,6 @@
 
 services:
-  claudecode_server:
+  kiro_rs:
     image: rust:1.92-alpine
     container_name: kiro_rs
     ports:
