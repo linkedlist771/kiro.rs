@@ -146,6 +146,10 @@ async fn main() {
     tracing::info!("  GET  /v1/models");
     tracing::info!("  POST /v1/messages");
     tracing::info!("  POST /v1/messages/count_tokens");
+    tracing::info!("  POST /v1/chat/completions (OpenAI 兼容)");
+    tracing::info!("OpenAI 兼容 API:");
+    tracing::info!("  GET  /openai/v1/models");
+    tracing::info!("  POST /openai/v1/chat/completions");
     if admin_key_valid {
         tracing::info!("Admin API:");
         tracing::info!("  GET  /api/admin/credentials");

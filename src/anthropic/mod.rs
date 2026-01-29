@@ -25,6 +25,9 @@
 mod converter;
 mod handlers;
 mod middleware;
+mod openai_converter;
+mod openai_handlers;
+pub mod openai_types;
 mod router;
 mod stream;
 pub mod types;

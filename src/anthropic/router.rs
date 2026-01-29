@@ -12,6 +12,7 @@ use crate::kiro::provider::KiroProvider;
 use super::{
     handlers::{count_tokens, get_models, post_messages, post_messages_cc},
     middleware::{AppState, auth_middleware, cors_layer},
+    openai_handlers::{get_openai_models, post_chat_completions},
 };
 
 /// 请求体最大大小限制 (50MB)
@@ -23,6 +24,7 @@ const MAX_BODY_SIZE: usize = 50 * 1024 * 1024;
 /// - `GET /v1/models` - 获取可用模型列表
 /// - `POST /v1/messages` - 创建消息（对话）
 /// - `POST /v1/messages/count_tokens` - 计算 token 数量
+/// - `POST /v1/chat/completions` - OpenAI Chat Completion 兼容端点
 ///
 /// # 认证
 /// 所有 `/v1` 路径需要 API Key 认证，支持：
@@ -47,11 +49,13 @@ pub fn create_router_with_provider(
         state = state.with_profile_arn(arn);
     }
 
-    // 需要认证的 /v1 路由
+    // 需要认证的 /v1 路由（Anthropic + OpenAI 兼容）
     let v1_routes = Router::new()
         .route("/models", get(get_models))
         .route("/messages", post(post_messages))
         .route("/messages/count_tokens", post(count_tokens))
+        // OpenAI Chat Completion 兼容端点
+        .route("/chat/completions", post(post_chat_completions))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
@@ -67,9 +71,19 @@ pub fn create_router_with_provider(
             auth_middleware,
         ));
 
+    // OpenAI 兼容路由（独立的 /openai/v1 路径）
+    let openai_routes = Router::new()
+        .route("/models", get(get_openai_models))
+        .route("/chat/completions", post(post_chat_completions))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ));
+
     Router::new()
         .nest("/v1", v1_routes)
         .nest("/cc/v1", cc_v1_routes)
+        .nest("/openai/v1", openai_routes)
         .layer(cors_layer())
         .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .with_state(state)

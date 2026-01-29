@@ -1,0 +1,13 @@
+# 交叉编译配置
+
+# Linux x86_64 (musl - 静态链接，兼容性更好)
+[target.x86_64-unknown-linux-musl]
+linker = "x86_64-linux-musl-gcc"
+
+# Linux aarch64 (musl - 静态链接)
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-musl-gcc"
+
+# Linux x86_64 (gnu - 动态链接)
+[target.x86_64-unknown-linux-gnu]
+linker = "x86_64-unknown-linux-gnu-gcc"
