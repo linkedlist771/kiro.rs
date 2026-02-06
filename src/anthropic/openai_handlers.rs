@@ -74,6 +74,12 @@ pub async fn get_openai_models() -> impl IntoResponse {
             owned_by: "anthropic".to_string(),
         },
         OpenAIModel {
+            id: "claude-opus-4-6-20260206".to_string(),
+            object: "model".to_string(),
+            created: 1770253200,
+            owned_by: "anthropic".to_string(),
+        },
+        OpenAIModel {
             id: "claude-haiku-4-5-20251001".to_string(),
             object: "model".to_string(),
             created: 1727740800,
