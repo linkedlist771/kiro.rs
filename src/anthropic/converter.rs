@@ -17,14 +17,18 @@ use super::types::{ContentBlock, MessagesRequest, Thinking};
 /// 模型映射：将 Anthropic 模型名映射到 Kiro 模型 ID
 ///
 /// 按照用户要求：
-/// - 所有 sonnet → claude-sonnet-4.5
-/// - 所有 opus → claude-opus-4.5
+/// - sonnet: 包含 4.5 标识 → claude-sonnet-4.5，否则 → claude-sonnet-4.6
+/// - opus: 包含 4.5 标识 → claude-opus-4.5，否则 → claude-opus-4.6
 /// - 所有 haiku → claude-haiku-4.5
 pub fn map_model(model: &str) -> Option<String> {
     let model_lower = model.to_lowercase();
 
     if model_lower.contains("sonnet") {
-        Some("claude-sonnet-4.5".to_string())
+        if model_lower.contains("4-5") || model_lower.contains("4.5") {
+            Some("claude-sonnet-4.5".to_string())
+        } else {
+            Some("claude-sonnet-4.6".to_string())
+        }
     } else if model_lower.contains("opus") {
         if model_lower.contains("4-5") || model_lower.contains("4.5") {
             Some("claude-opus-4.5".to_string())
@@ -633,24 +637,22 @@ mod tests {
 
     #[test]
     fn test_map_model_sonnet() {
-        assert!(
-            map_model("claude-sonnet-4-20250514")
-                .unwrap()
-                .contains("sonnet")
+        assert_eq!(
+            map_model("claude-sonnet-4-20250514").unwrap(),
+            "claude-sonnet-4.6"
         );
-        assert!(
-            map_model("claude-3-5-sonnet-20241022")
-                .unwrap()
-                .contains("sonnet")
+        assert_eq!(
+            map_model("claude-3-5-sonnet-20241022").unwrap(),
+            "claude-sonnet-4.5"
         );
     }
 
     #[test]
     fn test_map_model_opus() {
-        assert!(
-            map_model("claude-opus-4-20250514")
-                .unwrap()
-                .contains("opus")
+        assert_eq!(map_model("claude-opus-4-20250514").unwrap(), "claude-opus-4.6");
+        assert_eq!(
+            map_model("claude-opus-4.5-20250929").unwrap(),
+            "claude-opus-4.5"
         );
     }
 
